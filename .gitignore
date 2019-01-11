@@ -30,3 +30,13 @@
 *.exe
 *.out
 *.app
+
+# build dirs
+build/
+
+# Developer todo's (damn too ugly)
+/TODO
+
+# Visual Studio Code configurations, currently I'm keeping it here
+*.save
+.vscode/

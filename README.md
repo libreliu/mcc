@@ -9,3 +9,4 @@ System with proper C++ Compiler.
 
 #### Build
 Currently using CMake.
+Run build with `./build.sh` and be sure you have CMake installed.
