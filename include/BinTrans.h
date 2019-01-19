@@ -23,6 +23,7 @@ class BinTrans {
 
         void addFunction(const char *func_name, int param_count);
         void addBBlock(const char *func_name, const ir_bblock bblock);
+        void addBBlock(const char *func_name);
         void emit();
 
         void addInstr(const char *func_name, ir_type type, ir_opcode opcode, const char *opa, const char *opb, const char *res);
@@ -68,10 +69,12 @@ class BinTrans {
         void emitWriteBack();
         ir_reg getReg(const char *sym_name, int *prot, int prot_len);
 
+        void emitConstRead(ir_reg reg, const char *const_name);
 
         int emitMove();
 
         ir_symbol *findSymbol(const char *sym_name);
+        ir_reg findAvailRegister(int *prot, int prot_len);
 
         //push ir_reg to stack
         int emitPush(ir_reg reg);

@@ -45,6 +45,17 @@ void BinTrans::addBBlock(const char *func_name, const ir_bblock bblock) {
     throw std::out_of_range("no matching function");
 }
 
+void BinTrans::addBBlock(const char *func_name) {
+    ir_func func;
+    ir_bblock blk_empty;
+    for(std::list<ir_func>::iterator it = f.begin(); it != f.end(); ++it) {
+        if (!strcmp(it->name, func_name)) {
+                it->block.push_back(blk_empty);
+                return;
+        }
+    }
+    throw std::out_of_range("no matching function");
+}
 
 void BinTrans::addInstr(const char *func_name, ir_type type, ir_opcode opcode, const char *opa, const char *opb, const char *res) {
     char ops[3][MAX_SYMBOL_LEN + 1];
@@ -508,133 +519,23 @@ void BinTrans::dumpRegContext() {
     }
 }
 
+void BinTrans::emitConstRead(ir_reg reg, const char *const_name) {
+    //Only ints now
+    printf("LD R%d, %s", reg, const_name);
+}
 
-//find register representation for sym_name
-//allocate if needed
-//int *v: violatile list
-ir_reg BinTrans::getReg(const char *sym_name, int *prot, int prot_len) {
-    PutLog("processing %s", sym_name);
-
-    ir_symbol *s, *ss;
-    if ( (s = this->findSymbol(sym_name)) == NULL ) {
-        throw std::out_of_range("invalid sym_name");
-        return -1;
-    }
-    //Added processing for constants
-    if (s->type == L_CONST) {
-        return -1;
-    } else if (s->type == PARAMETER || s->type == IN_FUNCTION) {
-        if (s->in_reg)
-            return s->reg_addr;
-        else if (s->in_mem && (s->type == PARAMETER || s->type == IN_FUNCTION)) {
-            //Swap to register
-            for (int i = 0; i < TOTAL_REGISTER_COUNT - 2; i++) {
-                if (!ct.used[i]) {
-                    ct.used[i] = true;
-                    strcpy(ct.use[i], sym_name);
-
-                    //Copy it here
-                    this->emitStackRead(i, s->mem_addr);
-
-                    s->in_reg = true;
-                    s->reg_addr = i;
-                    s->dirty = false;
-                    return s->reg_addr;
-                }
-            }
-
-            //No more free registers, find non-dirty in_mem & in_reg registers
-            for (int i = 0; i < TOTAL_REGISTER_COUNT - 2; i++) {
-                if ( (ct.used[i] && (ss = findSymbol(ct.use[i]))->dirty == 0) && (ss->in_mem) && (ss->in_reg) ) {
-                    bool isProtected = false;
-                    for (int j = 0; j < prot_len; j++) {
-                        if (prot[j] == i) {
-                            isProtected = true;
-                            break;
-                        }
-                    }
-                    if (isProtected)
-                        continue;
-                    else {
-                        //Discard values in register, and update state
-                        ss->in_reg = false;
-
-                        strcpy(ct.use[i], sym_name);
-
-                        //Copy it here
-                        this->emitStackRead(i, s->mem_addr);
-
-                        s->in_reg = true;
-                        s->reg_addr = i;
-                        s->dirty = false;
-
-                        return s->reg_addr;
-                    }
-                }
-            }
-
-
-            //No more tidy registers, find one, swap to stack, update offset, then take this variable in
-            for (int i = 0; i < TOTAL_REGISTER_COUNT - 2; i++) {
-                if (ct.used[i]) {
-                    ss = findSymbol(ct.use[i]);
-                    if (ss->in_reg) {
-                        bool isProtected = false;
-                        for (int j = 0; j < prot_len; j++) {
-                            if (prot[j] == i) {
-                                isProtected = true;
-                                break;
-                            }
-                        }
-                        if (isProtected)
-                            continue;
-
-                        int mem_addr = emitPush(ss->reg_addr);
-                        int ret_reg = ss->reg_addr;
-
-                        ss->dirty = false;
-                        ss->in_reg = false;
-                        ss->mem_addr = mem_addr;
-                        ss->in_mem = true;
-
-                        //update
-                        strcpy(ct.use[i], sym_name);
-
-                        //Copy it here
-                        this->emitStackRead(i, s->mem_addr);
-                        s->in_reg = true;
-                        s->reg_addr = ret_reg;
-                        s->dirty = false;
-
-                        return s->reg_addr;
-                    }
-                }
-            }
-
-            //So sorry, but no registers left. Perhaps you've got a large prot[] ?
-            PutLog("Error: can't alloc for a place to seat %s in", sym_name);
-            throw std::out_of_range("can't alloc for a place to seat");
-
-        }
-
-        //Neither in mem nor in reg. Means a deprecated variable
-
+ir_reg BinTrans::findAvailRegister(int *prot, int prot_len) {
         //Check if we have unused registers
         //**Avoid R7 and R6**
         for (int i = 0; i < TOTAL_REGISTER_COUNT - 2; i++) {
             if (!ct.used[i]) {
-                ct.used[i] = true;
-                strcpy(ct.use[i], sym_name);
-                s->in_reg = true;
-                s->reg_addr = i;
-                s->dirty = false;
-                return s->reg_addr;
+                return i;
             }
         }
 
         //We have no registers left - Spill one in
         //First, let's see if there is register that's not dirty, in memory and not in protect list
-
+        ir_symbol *ss;
         for (int i = 0; i < TOTAL_REGISTER_COUNT - 2; i++) {
             if ( (ct.used[i] && (ss = findSymbol(ct.use[i]))->dirty == 0) && (ss->in_mem) && (ss->in_reg) ) {
                 bool isProtected = false;
@@ -675,9 +576,6 @@ ir_reg BinTrans::getReg(const char *sym_name, int *prot, int prot_len) {
                     int mem_addr = emitPush(ss->reg_addr);
                     int ret_reg = ss->reg_addr;
 
-                    //update
-                    strcpy(ct.use[i], sym_name);
-
                     ss->dirty = false;
                     ss->in_reg = false;
                     ss->mem_addr = mem_addr;
@@ -686,13 +584,62 @@ ir_reg BinTrans::getReg(const char *sym_name, int *prot, int prot_len) {
                 }
             }
         }
-
-
         throw std::out_of_range("No enough register left!\n");
         return -1;
+}
 
+
+//find register representation for sym_name
+//allocate if needed
+//int *v: violatile list
+ir_reg BinTrans::getReg(const char *sym_name, int *prot, int prot_len) {
+    PutLog("processing %s", sym_name);
+
+    ir_symbol *s, *ss;
+    int ret_reg;
+    if ( (s = this->findSymbol(sym_name)) == NULL ) {
+        throw std::out_of_range("invalid sym_name");
+        return -1;
+    }
+    
+    if (s->type == L_CONST) {
+        if (s->in_reg)
+            return s->reg_addr;
+
+        //Actually, this depends on the current situation of PC.
+        //If the literials are too far away, only LDR can handle this.
+        //Here I'm using a risky approach - assuming the code no more than PCOff9
+        ret_reg = findAvailRegister(prot, prot_len);
+        this->emitConstRead(ret_reg, sym_name);
+
+        ct.used[ret_reg] = true;
+        strcpy(ct.use[ret_reg], sym_name);
+
+        s->in_reg = true;
+        s->reg_addr = ret_reg;
+        s->dirty = false;
+        return s->reg_addr;
+
+    } else if (s->type == PARAMETER || s->type == IN_FUNCTION) {
+        if (s->in_reg)
+            return s->reg_addr;
+
+        ret_reg = findAvailRegister(prot, prot_len);
+        
+        //In some time, the var is neither in mem or in reg, so we can avoid reading it in.
+        //**This is supported, but not guaranteed to be ok, especially in interblock procedures.
+        if (s->in_mem)
+            this->emitStackRead(ret_reg, s->mem_addr);
+
+        ct.used[ret_reg] = true;
+        strcpy(ct.use[ret_reg], sym_name);
+
+        s->in_reg = true;
+        s->reg_addr = ret_reg;
+        s->dirty = false;
+        return s->reg_addr;
     } else {
-        throw std::out_of_range("invalid symbol type");
+        throw std::out_of_range("unsupported symbol type");
     }
 }
 

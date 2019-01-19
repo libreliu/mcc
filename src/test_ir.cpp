@@ -10,10 +10,11 @@ void test_ir() {
     BinTrans bt;
     bt.addFunction("a", 5);
 //    bt.addFunction("b", 1);
-    ir_bblock blk;
+//    ir_bblock blk;
 
-    bt.addBBlock("a", blk);
-
+//    bt.addBBlock("a", blk);
+    bt.addBBlock("a");
+    
     bt.addSymbol("t1", IN_FUNCTION, false, 0, false, 0, false);
     bt.addSymbol("t2", IN_FUNCTION, false, 0, false, 0, false);
     bt.addSymbol("t3", IN_FUNCTION, false, 0, false, 0, false);
@@ -49,4 +50,28 @@ void test_literial() {
 
     bt.dumpLiteral();
     printf("=====================\n");
+}
+
+void test_fib() {
+    printf("===Testing for fib start===");
+    /* Intermediate Level Desc.
+    bb0: if (.param0 == 0) goto bb1 else bb2
+    bb1: return 1
+    bb2: if (.param0 == 1) goto bb3 else bb4
+    bb3: return 2
+    bb4: t1 = fib(n-1)
+        t2 = fib(n-2)
+        t3 = t1 + t2
+        return t3
+    */
+    BinTrans bt;
+    bt.addFunction("fib", 1);
+    bt.addBBlock("fib");
+    bt.addInstr("fib", BRANCH, IROP_IFZERO, ".param0", "bb1", "bb2");
+    bt.addBBlock("fib");
+    //bt.addInstr("fib", RET, IROP_RETPARAM, );  //return 1
+
+    bt.addSymbol("t1", IN_FUNCTION, false, -1, false, -1, false);
+    bt.addSymbol("t2", IN_FUNCTION, false, -1, false, -1, false);
+    bt.addSymbol("t3", IN_FUNCTION, false, -1, false, -1, false);
 }
