@@ -8,4 +8,5 @@ using namespace std;
 int main() {
     test_literial();
     test_ir();
+    test_fib();
 }

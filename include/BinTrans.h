@@ -9,12 +9,15 @@
 #include <stdexcept>
 #include "ir_struct.h"
 
+#ifdef DEBUG
 #define PutLog(...) do{                                           \
                            printf("[%s, %d] ", __func__, __LINE__);      \
                            printf(__VA_ARGS__);                      \
                            printf("\n"); \
                           } while (0)
-
+#else
+#define PutLog(...) do{ } while (0)
+#endif
 
 class BinTrans {
     public:
@@ -56,6 +59,8 @@ class BinTrans {
         //Argument passing translations
         ir_arg_context ac;
 
+        //context-related params
+        
 
         std::list<ir_func> f;
         void emitFunction(ir_func &func);
@@ -71,7 +76,7 @@ class BinTrans {
 
         void emitConstRead(ir_reg reg, const char *const_name);
 
-        int emitMove();
+        void emitConstTable();
 
         ir_symbol *findSymbol(const char *sym_name);
         ir_reg findAvailRegister(int *prot, int prot_len);

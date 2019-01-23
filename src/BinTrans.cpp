@@ -57,6 +57,22 @@ void BinTrans::addBBlock(const char *func_name) {
     throw std::out_of_range("no matching function");
 }
 
+void BinTrans::emitConstTable() {
+    for(std::list<ir_symbol>::iterator it = syms.begin(); it != syms.end(); it++) {
+        if (it->type == L_CONST) {
+            //it = syms.erase(it); //notice about *iterator validity*
+            // //also remind to delete reg_context
+            // for (int i = 0; i < TOTAL_REGISTER_COUNT - 2; i++) {
+            //     if (ct.used[i] && (!strcmp(ct.use[i], name)) ) {
+            //         ct.used[i] = false;
+            //     }
+            // }
+            // return;
+            printf("%s .FILL #%d\n", it->name, getLiterial(it->name));
+        }
+    }    
+}
+
 void BinTrans::addInstr(const char *func_name, ir_type type, ir_opcode opcode, const char *opa, const char *opb, const char *res) {
     char ops[3][MAX_SYMBOL_LEN + 1];
     strcpy(ops[0], opa);
@@ -156,32 +172,15 @@ void BinTrans::emitBranch(const ir_inst &inst, const char *func_name) {
     case IROP_IFZERO:
         //emitBlockEpilogue : save everything back to memory
 
-        /* if opa(ops[0]) == 0 goto res(ops[2]) else goto opb */
+        //if ops[0] == 0 goto ops[1] else goto ops[2]
+        this->emitWriteBack();
         opa = getReg(inst.ops[0], NULL, 0);
+        this->discardRegRecord(inst.ops[0]);
+        
         printf("ADD R%d, R%d, #0\n", opa, opa);
-        printf("BRz %s.%s\n", func_name, inst.ops[2]);
-        printf("BRnzp %s.%s\n", func_name, inst.ops[1]);
+        printf("BRz %s_%s\n", func_name, inst.ops[1]);
+        printf("BRnzp %s_%s\n", func_name, inst.ops[2]);
         break;
-    case IROP_IFEQ:
-        /* if opa == opb goto res(ops[2]) */
-        addSymbol(".ifeq_topb", IN_FUNCTION, false, 0, false, 0, false);
-        addSymbol(".ifeq_topa", IN_FUNCTION, false, 0, false, 0, false);
-        tmp = getReg(".ifeq_topb", prot, 0);
-        prot[0] = tmp;
-        opb = getReg(inst.ops[1], prot, 1);
-        printf("NOT R%d, R%d\n", tmp, opb);
-        printf("ADD R%d, R%d, #1\n", tmp, tmp);
-        //no need to protect opb
-        opa = getReg(inst.ops[0], prot, 1);
-        prot[1] = opa;
-        res = getReg(".ifeq_topb", prot, 2);
-
-        printf("ADD R%d, R%d, R%d\n", res, opa, tmp);
-        //test
-        printf("BRz %s.%s\n", func_name, inst.ops[2]);
-
-        delSymbol(".ifeq_topb");
-        delSymbol(".ifeq_topa");
 
     }
 }
@@ -197,10 +196,10 @@ void BinTrans::emitReturn(const ir_inst &inst, const char *func_name) {
         emitRegMove(0, opa);
         this->discardRegRecord(inst.ops[0]);
 
-        printf("BRnzp %s.epilogue\n", func_name);
+        printf("BRnzp %s_epilogue\n", func_name);
         break;
     case IROP_RETNPARAM:
-        printf("BRnzp %s.epilogue\n", func_name);
+        printf("BRnzp %s_epilogue\n", func_name);
         break;
     }
 }
@@ -220,6 +219,8 @@ void BinTrans::discardRegRecord(const char *sym_name) {
 
 void BinTrans::emitCall(const ir_inst &inst) {
     ir_symbol *s;
+    ir_reg opa;
+    ir_reg prot[1];
 
     switch (inst.opcode) {
     case IROP_PUSHARG:
@@ -229,6 +230,7 @@ void BinTrans::emitCall(const ir_inst &inst) {
 
         break;
     case IROP_CALL:
+    case IROP_CALLRET:
         //save all reg. to mem (stack)
         /* Conditions for ct
          * 1. Not used => do nothing
@@ -302,6 +304,15 @@ void BinTrans::emitCall(const ir_inst &inst) {
 
         //resetting context
         ac.arg_count = 0;
+        if (inst.opcode == IROP_CALLRET) {
+            //Store values in var
+            prot[0] = 0; // retval passed in R0
+            opa = this->getReg(inst.ops[1], prot, 1);
+            emitADD(opa, 0, 0);
+        }
+
+        break;
+
     }
 }
 
@@ -454,7 +465,7 @@ void BinTrans::emitFunction(ir_func &func) {
     ac.arg_count = 0;
 
     //prologue
-    printf("%s.prologue\n", func.name);
+    printf("; %s_prologue\n", func.name);
 
     //saveR3, R4, R5, R7 - push in stack
     emitPush(3);
@@ -469,12 +480,18 @@ void BinTrans::emitFunction(ir_func &func) {
     }
 
     //epilogue
-    printf("%s.epilogue\n", func.name);
+    printf("%s_epilogue\n", func.name);
 
     emitPop(7);
     emitPop(5);
     emitPop(4);
     emitPop(3);
+
+    printf("RET\n");
+
+    //consts
+    printf("; %s.consts\n", func.name);
+    emitConstTable();
 }
 
 void BinTrans::emitStackWrite(ir_reg reg, int offset) {
@@ -507,7 +524,7 @@ void BinTrans::emitJSR(const char *label) {
 }
 
 void BinTrans::emitADD(ir_reg dest, ir_reg opa, int imm) {
-    printf("ADD R%d, R%d, #%d\n", dest, opa, imm);
+    printf("ADD R%d, R%d, #%d\n", dest, opa, imm); //problematic?? TODO!!
 }
 
 void BinTrans::dumpRegContext() {
@@ -521,7 +538,7 @@ void BinTrans::dumpRegContext() {
 
 void BinTrans::emitConstRead(ir_reg reg, const char *const_name) {
     //Only ints now
-    printf("LD R%d, %s", reg, const_name);
+    printf("LD R%d, %s\n", reg, const_name);
 }
 
 ir_reg BinTrans::findAvailRegister(int *prot, int prot_len) {

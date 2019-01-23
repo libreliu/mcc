@@ -3,5 +3,6 @@
 
 void test_ir();
 void test_literial();
+void test_fib();
 
 #endif // TEST_IR_H_INCLUDED

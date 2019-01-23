@@ -15,15 +15,16 @@
 #define IROP_PUSHARG 10
 //ops[0] = target
 #define IROP_CALL 20
+//Store return value
+#define IROP_CALLRET 21
 
 //return without param
 #define IROP_RETNPARAM 21
 //return with param
 #define IROP_RETPARAM 22
 
-//if opa == 0 goto res
+//if ops[0] == 0 goto ops[1] else goto ops[2]
 #define IROP_IFZERO 30
-#define IROP_IFEQ 31
 
 #define MAX_ARGS 20
 #define MAX_SYMBOL_LEN 30
