@@ -7,6 +7,9 @@ if [ $# -eq 0 ]; then
 fi
 
 if [ $1 = build ]; then
+    if [ ! -d build ]; then
+        mkdir build
+    fi
     # Running CMake, out-of-source build
     cd ./build && cmake ..
     make
