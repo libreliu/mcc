@@ -309,6 +309,7 @@ void BinTrans::emitCall(const ir_inst &inst) {
             prot[0] = 0; // retval passed in R0
             opa = this->getReg(inst.ops[1], prot, 1);
             emitADD(opa, 0, 0);
+            findSymbol(inst.ops[1])->dirty = true;  //NECESSARY!
         }
 
         break;
@@ -482,10 +483,14 @@ void BinTrans::emitFunction(ir_func &func) {
     //epilogue
     printf("%s_epilogue\n", func.name);
 
-    emitPop(7);
-    emitPop(5);
-    emitPop(4);
-    emitPop(3);
+    //DO NOT USE emitPop, since sc.offset usually won't be zero.
+    //Walkaround: manually emit here
+    // emitPop(7);
+    // emitPop(5);
+    // emitPop(4);
+    // emitPop(3);
+    printf("LDR R7, R6, #4\nLDR R5, R6, #3\nLDR R4, R6, #2\nLDR R3, R6, #1\n");
+
 
     printf("RET\n");
 
@@ -546,7 +551,16 @@ ir_reg BinTrans::findAvailRegister(int *prot, int prot_len) {
         //**Avoid R7 and R6**
         for (int i = 0; i < TOTAL_REGISTER_COUNT - 2; i++) {
             if (!ct.used[i]) {
-                return i;
+                bool isProtected = false;
+                for (int j = 0; j < prot_len; j++) {
+                    if (prot[j] == i) {
+                        isProtected = true;
+                        break;
+                    }
+                }
+                if (isProtected)
+                    continue;
+                else return i;
             }
         }
 

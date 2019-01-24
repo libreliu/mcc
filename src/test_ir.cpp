@@ -66,8 +66,8 @@ void test_fib() {
         t1 = n - 1
         t2 = n - 2
         t1 = fib(t1)
-        t2 = fib(t2)
-        t3 = t1 + t2
+    bb5:t2 = fib(t2)
+    bb6:t3 = t1 + t2
         return t3
     */
     BinTrans bt;
@@ -99,8 +99,10 @@ void test_fib() {
     bt.addInstr("fib", ARITHMETIC, IROP_SUB, ".param0", "const_2", "t2");
     bt.addInstr("fib", CALL, IROP_PUSHARG, "t1", "", "");
     bt.addInstr("fib", CALL, IROP_CALLRET, "fib", "t1", ""); //return value sto in t1
+    bt.addBBlock("fib"); //bb5
     bt.addInstr("fib", CALL, IROP_PUSHARG, "t2", "", "");
     bt.addInstr("fib", CALL, IROP_CALLRET, "fib", "t2", ""); //return value sto in t2
+    bt.addBBlock("fib"); //bb6
     bt.addInstr("fib", ARITHMETIC, IROP_ADD, "t1", "t2", "t3");
     bt.addInstr("fib", RET, IROP_RETPARAM, "t3", "", "");  //return 2  
 
